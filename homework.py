@@ -29,7 +29,6 @@ RETRY_PERIOD = 600
 ENDPOINT = 'https://practicum.yandex.ru/api/user_api/homework_statuses/'
 HEADERS = {'Authorization': f'OAuth {PRACTICUM_TOKEN}'}
 
-
 HOMEWORK_VERDICTS = {
     'approved': 'Работа проверена: ревьюеру всё понравилось. Ура!',
     'reviewing': 'Работа взята на проверку ревьюером.',
@@ -39,7 +38,6 @@ HOMEWORK_VERDICTS = {
 logging.basicConfig(
     level=logging.DEBUG,
     filename='program.log',
-    filemod='w',
     format='%(asctime)s - %(levelname)s - %(message)s - %(name)s'
 )
 logger = logging.getLogger(__name__)
@@ -72,16 +70,16 @@ def send_message(bot, message):
 def get_api_answer(timestamp):
     """Запрос к эндпоиту API."""
     try:
-        hw_stat = requests.get(
-            ENDPOINT,
+        resp = requests.get(
+            url=ENDPOINT,
             headers=HEADERS,
-            params={'form_date': timestamp}
+            params={'from_date': timestamp}
         )
-        if hw_stat.status_code != 200:
+        if resp.status_code != 200:
             logging.error(
-                f'ошибка ресурса, {hw_stat.status_code}')
-            raise ResponseStatus(hw_stat.status_code)
-        return hw_stat.json()
+                f'ошибка в коде ответа, {resp.status_code}')
+            raise ResponseStatus(resp.status_code)
+        return resp.json()
     except Exception as error:
         logging.error(f'Ошибка ресурса, {error}')
         raise SystemError(f'Ошибка ресурса, {error}')
@@ -90,11 +88,13 @@ def get_api_answer(timestamp):
 def check_response(response):
     """Проверка ответа."""
     if not isinstance(response, dict):
-        raise TypeError('Переменная не соответствует типу dict')
+        raise TypeError('Ответ не соответствует типу dict')
+    if 'homeworks' not in response.keys():
+        raise Exception('В ответе API нет ключа "homeworks"')
     homeworks = response['homeworks']
     if not isinstance(homeworks, list):
         raise TypeError('Тип перечня домашних работ не является списком')
-    return response.get('homeworks')[0]
+    return homeworks
 
 
 def parse_status(homework):
@@ -103,10 +103,10 @@ def parse_status(homework):
     homework_name = homework.get('homework_name')
     if 'homework_name' not in homework or None:
         raise KeyError(f'Не найден {homework_name}.')
-    if status not in HOMEWORK_VERDICTS is None:
+    if status not in HOMEWORK_VERDICTS or None:
         raise Exception('ошибка статуса сервера')
-    verdict = HOMEWORK_VERDICTS[status]
-    return f'Изменился статус проверки работы "{homework_name}". {verdict}'
+    verdict = HOMEWORK_VERDICTS.get(status)
+    return f'Изменился статус проверки работы "{homework_name}": {verdict}'
 
 
 def main():
@@ -122,8 +122,9 @@ def main():
         try:
             response = get_api_answer(timestamp)
             homeworks = check_response(response)
-            if not homeworks:
-                message = 'Домашка ещё не сдана'
+            timestamp = response.get('current_date')
+            if len(homeworks) == 0:
+                message = 'Домашка ещё не проверена'
             else:
                 message = parse_status(homeworks[0])
             if last_message != message:
@@ -131,9 +132,9 @@ def main():
                 last_message = message
         except Exception as error:
             message = f'Сбой в работе программы: {error}'
-            if last_error != error:
+            if last_error != message:
                 send_message(bot, message)
-                last_error = error
+                last_error = message
             logging.error(message)
         finally:
             time.sleep(RETRY_PERIOD)
