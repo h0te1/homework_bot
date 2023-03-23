@@ -94,6 +94,7 @@ def check_response(response):
         raise TypeError('Ответ не соответствует типу dict')
     if missed_keys := {'homeworks', 'current_date'} - response.keys():
         logger.error(f'В ответе API нет ожидаемых ключей: {missed_keys}')
+        raise Exception(f'В ответе API нет ключей {missed_keys}')
     homeworks = response['homeworks']
     if not isinstance(homeworks, list):
         raise TypeError('Тип перечня домашних работ не является списком')
