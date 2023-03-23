@@ -58,6 +58,7 @@ def check_tokens():
 
 def send_message(bot, message):
     """отправка сообщений в телеграм."""
+    logger.info('Попытка отправить сообщение')
     try:
         bot.send_message(TELEGRAM_CHAT_ID, message)
         logger.debug(
@@ -69,6 +70,7 @@ def send_message(bot, message):
 
 def get_api_answer(timestamp):
     """Запрос к эндпоиту API."""
+    logger.info('Начало запроса к API')
     try:
         resp = requests.get(
             url=ENDPOINT,
@@ -77,7 +79,8 @@ def get_api_answer(timestamp):
         )
         if resp.status_code != 200:
             logging.error(
-                f'ошибка в коде ответа, {resp.status_code}')
+                f'ошибка в коде ответа, {resp.status_code}',
+                f'params = {resp.params}')
             raise ResponseStatus(resp.status_code)
         return resp.json()
     except Exception as error:
@@ -89,8 +92,8 @@ def check_response(response):
     """Проверка ответа."""
     if not isinstance(response, dict):
         raise TypeError('Ответ не соответствует типу dict')
-    if 'homeworks' not in response.keys():
-        raise Exception('В ответе API нет ключа "homeworks"')
+    if missed_keys := {'homeworks', 'current_date'} - response.keys():
+        logger.error(f'В ответе API нет ожидаемых ключей: {missed_keys}')
     homeworks = response['homeworks']
     if not isinstance(homeworks, list):
         raise TypeError('Тип перечня домашних работ не является списком')
